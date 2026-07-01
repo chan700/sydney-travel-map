@@ -678,3 +678,72 @@ body {
     background-color: #cbd5e1;
     border-radius: 3px;
 }
+
+/* 학생 후보 / 최종 답사지 */
+.final-tab-btn {
+    background-color: #111827;
+    color: #ffffff;
+}
+
+.route-step-item.candidate-item .step-body-card {
+    background: #fffbeb;
+    border-color: #f59e0b;
+}
+
+.route-step-item.final-added-item .step-body-card {
+    background: #ecfdf5;
+    border-color: #10b981;
+}
+
+.candidate-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 6px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.final-added-item .candidate-meta {
+    background: #d1fae5;
+    color: #047857;
+}
+
+.candidate-review-panel {
+    margin-top: 12px;
+    padding: 12px;
+    border: 1px solid #f59e0b;
+    border-radius: var(--radius-md);
+    background: #fffbeb;
+}
+
+.candidate-review-panel h4 {
+    margin-bottom: 8px;
+    font-size: 12px;
+}
+
+.candidate-select-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #334155;
+    cursor: pointer;
+}
+
+.candidate-select-row input {
+    width: 16px;
+    height: 16px;
+}
+
+.final-actions {
+    display: flex;
+    gap: 8px;
+    margin: 10px 0 4px;
+}

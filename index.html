@@ -30,6 +30,7 @@
             <div class="main-tabs">
                 <button class="menu-tab-btn active" data-menu="main">일자별 답사 루트</button>
                 <button class="menu-tab-btn" data-menu="theme">테마별 기획 루트</button>
+                <button class="menu-tab-btn" data-menu="collab">학생 후보 / 최종</button>
             </div>
 
             <!-- 하위 일정 조절 및 편집 탭 -->
@@ -51,6 +52,15 @@
                     <button class="tab-btn" data-route="architects">국제 건축가</button>
                 </div>
 
+                <div id="subtabs-collab" class="tab-header hidden">
+                    <button class="tab-btn" data-route="student-chanyoung">찬영</button>
+                    <button class="tab-btn" data-route="student-junhee">준희</button>
+                    <button class="tab-btn" data-route="student-jin">진</button>
+                    <button class="tab-btn" data-route="student-sungwon">성원</button>
+                    <button class="tab-btn" data-route="student-hyunwoo">현우</button>
+                    <button class="tab-btn final-tab-btn" data-route="final">최종</button>
+                </div>
+
                 <div class="itinerary-content">
                     
                     <!-- 신규 장소 동적 입력 폼 (Day 4, 5 선택 옵션 추가) -->
@@ -66,6 +76,17 @@
                         </div>
 
                         <form id="dynamic-add-form" class="dynamic-form">
+                            <div id="student-context-row" class="form-group-row hidden">
+                                <label for="candidate-owner">추가자</label>
+                                <select id="candidate-owner">
+                                    <option value="chanyoung">찬영</option>
+                                    <option value="junhee">준희</option>
+                                    <option value="jin">진</option>
+                                    <option value="sungwon">성원</option>
+                                    <option value="hyunwoo">현우</option>
+                                </select>
+                            </div>
+
                             <!-- 공통 필드: 날짜 선택 -->
                             <div class="form-group-row">
                                 <label for="place-day">답사 일자</label>
@@ -186,6 +207,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <!-- html2canvas Script (지도를 포함한 영역 캡처) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="collaboration-state.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

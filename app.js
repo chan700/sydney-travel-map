@@ -144,6 +144,92 @@ const pathGroup = L.layerGroup().addTo(map);
 let activeRouteKey = 'all'; 
 let activePlaceType = 'archi'; 
 
+const students = {
+    chanyoung: { name: "찬영", routeKey: "student-chanyoung", color: "#f59e0b" },
+    junhee: { name: "준희", routeKey: "student-junhee", color: "#3b82f6" },
+    jin: { name: "진", routeKey: "student-jin", color: "#8b5cf6" },
+    sungwon: { name: "성원", routeKey: "student-sungwon", color: "#10b981" },
+    hyunwoo: { name: "현우", routeKey: "student-hyunwoo", color: "#ef4444" },
+};
+
+const collaborationApi = window.SydneyCollaboration;
+const collaborationStoreKey = "sydney-archi-walk-collaboration-v1";
+let collaborationState = collaborationApi.hydrateState(localStorage.getItem(collaborationStoreKey));
+
+function saveCollaborationState() {
+    localStorage.setItem(collaborationStoreKey, collaborationApi.serializeState(collaborationState));
+}
+
+function getStudentIdFromRoute(routeKey) {
+    return Object.keys(students).find((id) => students[id].routeKey === routeKey) || null;
+}
+
+function isStudentRoute(routeKey) {
+    return Boolean(getStudentIdFromRoute(routeKey));
+}
+
+function getSelectedPlanDay() {
+    return document.getElementById('place-day')?.value || 'day1';
+}
+
+function syncCollaborationRoutes() {
+    const selectedDay = getSelectedPlanDay();
+
+    Object.entries(students).forEach(([studentId, student]) => {
+        const baseSpots = routesData[selectedDay].spots.map((spot) => ({
+            ...spot,
+            originDay: selectedDay.toUpperCase(),
+            dayColor: routesData[selectedDay].color,
+        }));
+        const candidateSpots = collaborationApi.getCandidatesForStudent(collaborationState, studentId, selectedDay).map((spot) => ({
+            ...spot,
+            isCandidate: true,
+            originDay: `${student.name} 후보`,
+            dayColor: student.color,
+        }));
+
+        routesData[student.routeKey] = {
+            title: `${student.name} 후보 일정`,
+            desc: `${student.name} 학생이 ${selectedDay.toUpperCase()}에 제안한 후보지를 기존 일정과 함께 확인합니다.`,
+            color: student.color,
+            spots: [...baseSpots, ...candidateSpots],
+            collaborationMode: "student",
+        };
+    });
+
+    const baseFinalSpots = ['day1', 'day2', 'day3', 'day4', 'day5'].flatMap((dayKey) => {
+        return routesData[dayKey].spots.map((spot) => ({
+            ...spot,
+            originDay: dayKey.toUpperCase(),
+            dayColor: routesData[dayKey].color,
+        }));
+    });
+    const finalCandidateSpots = collaborationApi.getFinalCandidates(collaborationState).map((spot) => ({
+        ...spot,
+        isFinalAdded: true,
+        originDay: `${students[spot.owner].name} 확정`,
+        dayColor: "#10b981",
+    }));
+
+    routesData.final = {
+        title: "최종 답사지",
+        desc: "기존 답사 일정에 회의에서 선택한 학생 후보지를 합친 최종 이동용 목록입니다.",
+        color: "#111827",
+        spots: [...baseFinalSpots, ...finalCandidateSpots],
+        collaborationMode: "final",
+    };
+}
+
+function updateCollaborationFormState() {
+    const studentId = getStudentIdFromRoute(activeRouteKey);
+    const row = document.getElementById('student-context-row');
+    if (!row) return;
+    row.classList.toggle('hidden', !studentId);
+    if (studentId) {
+        document.getElementById('candidate-owner').value = studentId;
+    }
+}
+
 // --- 3. 최적의 동선 정렬 알고리즘 (Nearest Neighbor TSP) ---
 function optimizeRoute() {
     if (activeRouteKey === 'all') {
@@ -204,6 +290,7 @@ function optimizeRoute() {
 
 // --- 4. 코스 렌더링 함수 ---
 function updateRouteView(routeKey) {
+    syncCollaborationRoutes();
     activeRouteKey = routeKey;
 
     let targetSpots = [];
@@ -233,7 +320,7 @@ function updateRouteView(routeKey) {
         titleText = route.title;
         descText = route.desc;
         themeColor = route.color;
-        targetSpots = route.spots.map(s => ({...s, originDay: routeKey.toUpperCase(), dayColor: route.color}));
+        targetSpots = route.spots.map(s => ({...s, originDay: s.originDay || routeKey.toUpperCase(), dayColor: s.dayColor || route.color}));
         
         document.getElementById('btn-optimize').style.opacity = "1";
         document.getElementById('btn-optimize').title = "지리적 거리를 계산하여 최적의 동선 순서로 자동 배치합니다.";
@@ -247,11 +334,12 @@ function updateRouteView(routeKey) {
     document.getElementById('map-subtitle-display').innerText = descText;
 
     const customPlaceCard = document.getElementById('custom-place-card');
-    if (routeKey === 'all' || routeKey.startsWith('day')) {
+    if (routeKey === 'all' || routeKey.startsWith('day') || isStudentRoute(routeKey)) {
         customPlaceCard.classList.remove('hidden');
     } else {
         customPlaceCard.classList.add('hidden');
     }
+    updateCollaborationFormState();
 
     // 2. 사이드바 리스트 렌더링
     const listContainer = document.getElementById('itinerary-list');
@@ -265,6 +353,7 @@ function updateRouteView(routeKey) {
         let timeColor = spot.dayColor || themeColor;
         let placeDetail = spot.desc;
         let originBadge = `<span style="font-size: 8px; background:${timeColor}; color: white; padding:1px 4px; border-radius:3px; margin-left:6px;">${spot.originDay}</span>`;
+        let candidateBadge = spot.isCandidate || spot.isFinalAdded ? `<span class="candidate-meta">${spot.originDay}</span>` : "";
 
         if (spot.type === "food") {
             nodeClass += " food-badge";
@@ -278,35 +367,42 @@ function updateRouteView(routeKey) {
         }
 
         const itemEl = document.createElement('div');
-        itemEl.className = 'route-step-item';
+        const deleteButton = spot.isCandidate || spot.isFinalAdded ? "" : `
+                        <button class="btn-delete-step" data-id="${spot.id}" data-origin="${spot.originDay ? spot.originDay.toLowerCase().replace(' ', '') : ''}" title="삭제">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+        `;
+        itemEl.className = `route-step-item${spot.isCandidate ? ' candidate-item' : ''}${spot.isFinalAdded ? ' final-added-item' : ''}`;
         itemEl.innerHTML = `
             <div class="${nodeClass}">${nodeText}</div>
             <div class="step-body-card">
                 <span class="step-time-badge" style="background-color: ${timeColor}15; color: ${timeColor};">${spot.time || `순서 ${stepNum}`}</span>
-                ${originBadge}
+                ${spot.isCandidate || spot.isFinalAdded ? "" : originBadge}
+                ${candidateBadge}
                 <div class="step-place-name">
                     <span>${spot.name}</span>
                     <div style="display:flex; align-items:center;">
                         <i class="fa-solid fa-chevron-right" style="margin-right: 8px;"></i>
-                        <button class="btn-delete-step" data-id="${spot.id}" data-origin="${spot.originDay ? spot.originDay.toLowerCase().replace(' ', '') : ''}" title="삭제">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
+                        ${deleteButton}
                     </div>
                 </div>
                 <p class="step-desc">${placeDetail}</p>
             </div>
         `;
 
-        itemEl.querySelector('.btn-delete-step').addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (confirm(`"${spot.name}" 장소를 일정에서 제거하시겠습니까?`)) {
-                const targetDay = e.currentTarget.dataset.origin;
-                if (routesData[targetDay]) {
-                    routesData[targetDay].spots = routesData[targetDay].spots.filter(s => s.id !== spot.id);
+        const deleteStepButton = itemEl.querySelector('.btn-delete-step');
+        if (deleteStepButton) {
+            deleteStepButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (confirm(`"${spot.name}" 장소를 일정에서 제거하시겠습니까?`)) {
+                    const targetDay = e.currentTarget.dataset.origin;
+                    if (routesData[targetDay]) {
+                        routesData[targetDay].spots = routesData[targetDay].spots.filter(s => s.id !== spot.id);
+                    }
+                    updateRouteView(routeKey);
                 }
-                updateRouteView(routeKey);
-            }
-        });
+            });
+        }
 
         itemEl.querySelector('.step-body-card').addEventListener('click', (e) => {
             if (e.target.closest('.btn-delete-step')) return;
@@ -320,6 +416,43 @@ function updateRouteView(routeKey) {
 
         listContainer.appendChild(itemEl);
     });
+
+    if (routeKey === 'final') {
+        const selected = new Set(collaborationState.finalIds);
+        const pendingCandidates = collaborationState.candidates.filter((candidate) => !selected.has(String(candidate.id)));
+        const reviewPanel = document.createElement('div');
+        reviewPanel.className = 'candidate-review-panel';
+        reviewPanel.innerHTML = `
+            <h4><i class="fa-solid fa-check-double"></i> 회의 후 최종 답사지에 넣을 후보 선택</h4>
+            ${pendingCandidates.length === 0 ? '<p class="step-desc">아직 선택 가능한 학생 후보가 없습니다.</p>' : pendingCandidates.map((candidate) => `
+                <label class="candidate-select-row">
+                    <input type="checkbox" class="candidate-final-checkbox" value="${candidate.id}">
+                    <span>${students[candidate.owner].name} 후보 · ${candidate.day.toUpperCase()} · ${candidate.name}</span>
+                </label>
+            `).join('')}
+            <div class="final-actions">
+                <button id="btn-add-selected-final" class="btn-primary" type="button">
+                    <i class="fa-solid fa-check"></i> 선택 후보를 최종 답사지에 추가
+                </button>
+            </div>
+        `;
+        listContainer.appendChild(reviewPanel);
+
+        const finalButton = document.getElementById('btn-add-selected-final');
+        if (finalButton) {
+            finalButton.disabled = pendingCandidates.length === 0;
+            finalButton.addEventListener('click', () => {
+                const selectedIds = Array.from(document.querySelectorAll('.candidate-final-checkbox:checked')).map((input) => input.value);
+                if (selectedIds.length === 0) {
+                    alert("최종 답사지에 추가할 후보를 선택해주세요.");
+                    return;
+                }
+                collaborationState = collaborationApi.addFinalCandidates(collaborationState, selectedIds);
+                saveCollaborationState();
+                updateRouteView('final');
+            });
+        }
+    }
 
     // 3. 지도 리렌더링
     markerGroup.clearLayers();
@@ -385,12 +518,14 @@ function updateRouteView(routeKey) {
             bounds.push([spot.lat, spot.lng]);
             dCoords.push([spot.lat, spot.lng]);
 
-            let pinColor = themeColor;
+            let pinColor = spot.dayColor || themeColor;
             let badgeChar = idx + 1;
             let popupType = "건축 답사지";
 
-            if (spot.type === "food") { pinColor = "#f43f5e"; badgeChar = "F"; popupType = "식당/카페"; }
-            else if (spot.type === "other") { pinColor = "#64748b"; badgeChar = "O"; popupType = "기타 장소"; }
+            if (spot.type === "food") { badgeChar = "F"; popupType = "식당/카페"; if (!spot.isCandidate && !spot.isFinalAdded) pinColor = "#f43f5e"; }
+            else if (spot.type === "other") { badgeChar = "O"; popupType = "기타 장소"; if (!spot.isCandidate && !spot.isFinalAdded) pinColor = "#64748b"; }
+            if (spot.isCandidate) popupType = `${popupType} 후보`;
+            if (spot.isFinalAdded) popupType = `${popupType} 확정`;
 
             const customIcon = L.divIcon({
                 className: 'custom-flag-marker',
@@ -489,6 +624,8 @@ document.getElementById('dynamic-add-form').addEventListener('submit', async (e)
 
             const newSpot = {
                 id: Date.now(),
+                owner: getStudentIdFromRoute(activeRouteKey) || document.getElementById('candidate-owner').value,
+                day: selectedDay,
                 type: activePlaceType,
                 time: `순서 ${routesData[selectedDay].spots.length + 1}`,
                 name: name,
@@ -498,7 +635,19 @@ document.getElementById('dynamic-add-form').addEventListener('submit', async (e)
                 phone: activePlaceType === 'food' ? extraInfo : ""
             };
 
-            routesData[selectedDay].spots.push(newSpot);
+            const activeStudentId = getStudentIdFromRoute(activeRouteKey);
+            if (activeStudentId) {
+                const candidateCount = collaborationApi.getCandidatesForStudent(collaborationState, activeStudentId, selectedDay).length;
+                collaborationState = collaborationApi.addCandidate(collaborationState, {
+                    ...newSpot,
+                    id: String(newSpot.id),
+                    owner: activeStudentId,
+                    time: `후보 ${candidateCount + 1}`,
+                });
+                saveCollaborationState();
+            } else {
+                routesData[selectedDay].spots.push(newSpot);
+            }
 
             // 입력 필드 비우기
             document.getElementById('archi-name').value = '';
@@ -511,8 +660,12 @@ document.getElementById('dynamic-add-form').addEventListener('submit', async (e)
             document.getElementById('other-address').value = '';
             document.getElementById('other-desc').value = '';
 
-            const dayTab = document.querySelector(`#subtabs-main .tab-btn[data-route="${selectedDay}"]`);
-            if (dayTab) dayTab.click();
+            if (activeStudentId) {
+                updateRouteView(activeRouteKey);
+            } else {
+                const dayTab = document.querySelector(`#subtabs-main .tab-btn[data-route="${selectedDay}"]`);
+                if (dayTab) dayTab.click();
+            }
         } else {
             alert(`"${name}"의 지리적 위치를 찾지 못했습니다. 보다 명확한 구글식 건물명 또는 영문 주소로 기입해 보세요.`);
         }
@@ -527,6 +680,12 @@ document.getElementById('dynamic-add-form').addEventListener('submit', async (e)
 
 // --- 6. 탭 전환 및 저장 이벤트 바인딩 ---
 
+document.getElementById('place-day').addEventListener('change', () => {
+    if (isStudentRoute(activeRouteKey)) {
+        updateRouteView(activeRouteKey);
+    }
+});
+
 document.querySelectorAll('.menu-tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         document.querySelectorAll('.menu-tab-btn').forEach(b => b.classList.remove('active'));
@@ -535,17 +694,27 @@ document.querySelectorAll('.menu-tab-btn').forEach(btn => {
         const menuMode = e.target.dataset.menu;
         const mainSubtabs = document.getElementById('subtabs-main');
         const themeSubtabs = document.getElementById('subtabs-theme');
+        const collabSubtabs = document.getElementById('subtabs-collab');
 
         if (menuMode === 'main') {
             mainSubtabs.classList.remove('hidden');
             themeSubtabs.classList.add('hidden');
+            collabSubtabs.classList.add('hidden');
             const activeSub = mainSubtabs.querySelector('.tab-btn.active') || mainSubtabs.querySelector('.tab-btn');
+            activeSub.classList.add('active');
+            updateRouteView(activeSub.dataset.route);
+        } else if (menuMode === 'theme') {
+            mainSubtabs.classList.add('hidden');
+            themeSubtabs.classList.remove('hidden');
+            collabSubtabs.classList.add('hidden');
+            const activeSub = themeSubtabs.querySelector('.tab-btn.active') || themeSubtabs.querySelector('.tab-btn');
             activeSub.classList.add('active');
             updateRouteView(activeSub.dataset.route);
         } else {
             mainSubtabs.classList.add('hidden');
-            themeSubtabs.classList.remove('hidden');
-            const activeSub = themeSubtabs.querySelector('.tab-btn.active') || themeSubtabs.querySelector('.tab-btn');
+            themeSubtabs.classList.add('hidden');
+            collabSubtabs.classList.remove('hidden');
+            const activeSub = collabSubtabs.querySelector('.tab-btn.active') || collabSubtabs.querySelector('.tab-btn');
             activeSub.classList.add('active');
             updateRouteView(activeSub.dataset.route);
         }
