@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>시드니 건축 답사 지도 & 동선 최적화 플래너</title>
+    <!-- Google Fonts: Outfit & Noto Sans KR -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Leaflet.js CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- 사이드바: 일정 및 동선 안내 -->
+        <aside class="sidebar">
+            <header class="app-header">
+                <div class="logo">
+                    <i class="fa-solid fa-map-marked-alt"></i>
+                    <h1>Sydney Archi-Walk</h1>
+                </div>
+                <p class="subtitle">건축 답사 일자별 동선 최적화 & 이미지 생성기</p>
+            </header>
+
+            <!-- 탭 메뉴 (메인 일정 vs 테마 일정) -->
+            <div class="main-tabs">
+                <button class="menu-tab-btn active" data-menu="main">일자별 답사 루트</button>
+                <button class="menu-tab-btn" data-menu="theme">테마별 기획 루트</button>
+            </div>
+
+            <!-- 하위 일정 조절 및 편집 탭 -->
+            <main class="itinerary-manager">
+                <!-- 일자별 서브 탭 (Day 4, Day 5 확장) -->
+                <div id="subtabs-main" class="tab-header">
+                    <button class="tab-btn active" data-route="all">전체 일정</button>
+                    <button class="tab-btn" data-route="day1">Day 1</button>
+                    <button class="tab-btn" data-route="day2">Day 2</button>
+                    <button class="tab-btn" data-route="day3">Day 3</button>
+                    <button class="tab-btn" data-route="day4">Day 4</button>
+                    <button class="tab-btn" data-route="day5">Day 5</button>
+                </div>
+                
+                <!-- 테마별 서브 탭 -->
+                <div id="subtabs-theme" class="tab-header hidden">
+                    <button class="tab-btn" data-route="seidler">해리 시들러</button>
+                    <button class="tab-btn" data-route="waterfront">수변 재생</button>
+                    <button class="tab-btn" data-route="architects">국제 건축가</button>
+                </div>
+
+                <div class="itinerary-content">
+                    
+                    <!-- 신규 장소 동적 입력 폼 (Day 4, 5 선택 옵션 추가) -->
+                    <div id="custom-place-card" class="custom-place-card">
+                        <div class="form-title">
+                            <h4><i class="fa-solid fa-map-pin"></i> 새로운 장소 추가</h4>
+                            <!-- 장소 분류 탭 -->
+                            <div class="place-type-selector">
+                                <button type="button" class="type-tab active" data-type="archi">건축/장소</button>
+                                <button type="button" class="type-tab" data-type="food">식당/카페</button>
+                                <button type="button" class="type-tab" data-type="other">기타 장소</button>
+                            </div>
+                        </div>
+
+                        <form id="dynamic-add-form" class="dynamic-form">
+                            <!-- 공통 필드: 날짜 선택 -->
+                            <div class="form-group-row">
+                                <label for="place-day">답사 일자</label>
+                                <select id="place-day">
+                                    <option value="day1">Day 1</option>
+                                    <option value="day2">Day 2</option>
+                                    <option value="day3">Day 3</option>
+                                    <option value="day4">Day 4</option>
+                                    <option value="day5">Day 5</option>
+                                </select>
+                            </div>
+
+                            <!-- 1. 건축/장소 전용 필드 -->
+                            <div id="fields-archi" class="type-fields">
+                                <div class="form-group">
+                                    <input type="text" id="archi-name" placeholder="건물명 또는 장소명 (예: 본다이 파빌리온)">
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" id="archi-address" placeholder="주소 (미입력 시 장소명으로 위치 검색)">
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" id="archi-desc" placeholder="특징 (예: 해안 공공건축 복원 사례)">
+                                </div>
+                            </div>
+
+                            <!-- 2. 식당/카페 전용 필드 -->
+                            <div id="fields-food" class="type-fields hidden">
+                                <div class="form-group">
+                                    <input type="text" id="food-name" placeholder="식당 또는 카페 이름 (예: 아이스버그 비스트로)">
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" id="food-address" placeholder="주소 (미입력 시 이름으로 위치 검색)">
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" id="food-phone" placeholder="전화번호 (예: +61 2 9369 6000)">
+                                </div>
+                            </div>
+
+                            <!-- 3. 기타 장소 전용 필드 -->
+                            <div id="fields-other" class="type-fields hidden">
+                                <div class="form-group">
+                                    <input type="text" id="other-name" placeholder="기타 장소 이름 (예: 왓슨스 베이 파크)">
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" id="other-address" placeholder="주소 (미입력 시 이름으로 위치 검색)">
+                                </div>
+                                <div class="form-group">
+                                    <input type="text" id="other-desc" placeholder="특징 (예: 시드니 갭 팍 근처 피크닉 스팟)">
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn-primary" id="btn-add-place">
+                                <i class="fa-solid fa-plus-circle"></i> 장소 찾기 및 추가
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- 현재 루트 설명 패널 -->
+                    <div id="route-intro" class="route-intro-card">
+                        <h3 id="intro-title">전체 일정 목록</h3>
+                        <p id="intro-desc">5일 동안 시드니 전역에서 탐방할 건축 명소 및 식당/카페의 모든 리스트입니다.</p>
+                    </div>
+
+                    <!-- 동선 순서 리스트 -->
+                    <div class="itinerary-list-title">
+                        <span><i class="fa-solid fa-route"></i> 등록된 답사 목록</span>
+                        <div style="display: flex; gap: 6px;">
+                            <button id="btn-optimize" class="btn-optimize-action" title="현재 등록된 장소들의 지리적 거리를 계산하여 최적의 경로 순서로 자동 재배치합니다.">
+                                <i class="fa-solid fa-magic"></i> 동선 최적화
+                            </button>
+                            <span class="route-badge" id="route-count">0개 스팟</span>
+                        </div>
+                    </div>
+                    
+                    <div id="itinerary-list" class="itinerary-list">
+                        <!-- JS에서 동적으로 리스트가 채워집니다 -->
+                    </div>
+                </div>
+            </main>
+
+            <!-- 푸터 / 이미지 내보내기 -->
+            <footer class="app-footer">
+                <button id="btn-export-image" class="btn-success">
+                    <i class="fa-solid fa-file-image"></i> 이 동선 지도 이미지로 저장
+                </button>
+            </footer>
+        </aside>
+
+        <!-- 메인 콘텐츠: 지도 영역 -->
+        <main class="map-wrapper">
+            <!-- 캡처 타깃 영역 -->
+            <div id="capture-area" class="capture-container">
+                <!-- 상단 타이틀 카드 (캡처 시 지도 위 노출) -->
+                <div class="map-overlay-title">
+                    <div class="overlay-logo"><i class="fa-solid fa-archway"></i> SYDNEY ARCHITECTURE WALK</div>
+                    <h2 id="map-title-display">Day 1 — 항구의 상징과 CBD 공공성</h2>
+                    <p id="map-subtitle-display">시드니 하버의 역사적 도시 인프라와 CBD의 현대건축 답사 동선</p>
+                </div>
+                
+                <!-- 실제 지도 -->
+                <div id="map"></div>
+                
+                <!-- 동선 범례 카드 -->
+                <div class="map-legend">
+                    <div class="legend-title">장소 타입 범례</div>
+                    <div class="legend-grid">
+                        <div class="legend-item"><span class="legend-num">1</span> 일반 건축물 및 답사지 (일정 순서)</div>
+                        <div class="legend-item"><span class="legend-num food-badge">F</span> 식당 / 카페 (Food)</div>
+                        <div class="legend-item"><span class="legend-num other-badge">O</span> 기타 관광/편의 장소 (Other)</div>
+                        <div class="legend-item"><span class="legend-line"></span> 최적화 도보/교통 연결 동선</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Leaflet.js Script -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <!-- html2canvas Script (지도를 포함한 영역 캡처) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
